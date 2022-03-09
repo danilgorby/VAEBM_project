@@ -132,7 +132,8 @@ class AutoEncoder(nn.Module):
         self.input_size = get_input_size(self.dataset)
 
         # decoder param
-        self.num_mix_output = args.num_mixture_dec
+        self.num_mix_output = 10  # args.num_mixture_dec
+
 
         # used for generative purpose
         c_scaling = CHANNEL_MULT ** (self.num_preprocess_blocks + self.num_latent_scales - 1)

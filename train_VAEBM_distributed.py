@@ -21,7 +21,8 @@ from nvae_model import AutoEncoder
 import utils
 import datasets
 
-from ebm_models import EBM_CelebA64, EBM_LSUN64, EBM_CIFAR32, EBM_CelebA256
+# from ebm_models import EBM_CelebA64, EBM_LSUN64, EBM_CIFAR32, EBM_CelebA256
+from ebm_models import EBM_CIFAR32 # , EBM_CelebA256, EBM_CelebA64, EBM_LSUN64,
 
 import torchvision
 from thirdparty.igebm_utils import sample_data, clip_grad

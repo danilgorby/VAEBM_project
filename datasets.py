@@ -69,11 +69,11 @@ import torchvision.transforms as transforms
 #         return self.__class__.__name__ + '()'
 
 
-# def get_loaders(args, dataset=None):
-#     """Get data loaders for required dataset."""
-#     if dataset is None:
-#         dataset = args.dataset
-#     return get_loaders_eval(dataset, args)
+def get_loaders(args, dataset=None):
+    """Get data loaders for required dataset."""
+    if dataset is None:
+        dataset = args.dataset
+    return get_loaders_eval(dataset, args)
 
 
 def get_loaders_eval(dataset, args):

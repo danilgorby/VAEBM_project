@@ -10,7 +10,8 @@ import torch.distributed as dist
 from torch.multiprocessing import Process
 from torch.autograd import Variable
 from torch import optim
-from apex import amp
+# from apex import amp
+import torch.cuda.amp as amp
 
 from nvae_model import AutoEncoder
 from train_VAEBM_distributed import init_processes
@@ -18,7 +19,9 @@ import utils
 import datasets
 import torchvision
 from tqdm import tqdm
-from ebm_models import EBM_CelebA64, EBM_LSUN64, EBM_CIFAR32, EBM_CelebA256
+# from ebm_models import EBM_CelebA64, EBM_LSUN64, EBM_CIFAR32, EBM_CelebA256
+from ebm_models import EBM_CIFAR32 # , EBM_CelebA256,  EBM_CelebA64, EBM_LSUN64,
+
 from thirdparty.igebm_utils import sample_data, clip_grad
 
 
