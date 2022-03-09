@@ -1,8 +1,3 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
-#
-# This work is licensed under the NVIDIA Source Code License
-# for VAEBM. To view a copy of this license, see the LICENSE file.
-# ---------------------------------------------------------------
 '''Code for training VAEBM'''
 
 import random
@@ -75,10 +70,10 @@ class SampleBuffer:
 
 
 def sample_buffer(buffer, z_list_exampler, batch_size=64, t = 1, p=0.95, device=torch.device('cuda:0')):
-    if len(buffer) < 1:       
-        
-        eps_z = [torch.Tensor(batch_size, zi.size(1), zi.size(2), zi.size(3)).normal_(0, 1.).cuda() \
-                 for zi in z_list_exampler]
+    if len(buffer) < 1:
+        eps_z = []
+        for zi in z_list_exampler:
+            eps_z.append(torch.Tensor(batch_size, zi.size(1), zi.size(2), zi.size(3)).normal_(0, 1.).cuda())
 
         return eps_z
     
@@ -91,7 +86,7 @@ def sample_buffer(buffer, z_list_exampler, batch_size=64, t = 1, p=0.95, device=
         eps_z_prior = [torch.Tensor(batch_size - n_replay, zi.size(1), zi.size(2), zi.size(3)).normal_(0, 1.).cuda()\
                 for zi in z_list_exampler]
 
-        eps_z_combine = [torch.cat([z1,z2], dim = 0) for z1,z2 in zip(eps_z_replay, eps_z_prior)]
+        eps_z_combine = [torch.cat([z1, z2], dim=0) for z1, z2 in zip(eps_z_replay, eps_z_prior)]
         
         return eps_z_combine
     else:
@@ -111,22 +106,21 @@ def train(model, VAE, t, loader, opt, model_path):
     
 
     parameters = model.parameters()
-    optimizer = optim.Adam(parameters, lr=opt.lr, betas = (0.99,0.999), weight_decay = opt.wd)
+    optimizer = optim.Adam(parameters, lr=opt.lr, betas=(0.99, 0.999), weight_decay=opt.wd)
     
     if opt.use_amp:
-        [model, VAE], optimizer = amp.initialize([model,VAE], optimizer, opt_level='O1')
+        [model, VAE], optimizer = amp.initialize([model, VAE], optimizer, opt_level='O1')
 
 
     d_s_t = []
     
-    with torch.no_grad(): #get a bunch of samples to know how many groups of latent variables are there
-        _, z_list, _ = VAE.sample(opt.batch_size, t) 
-    
+    with torch.no_grad():  # get a bunch of samples to know how many groups of latent variables are there
+        _, z_list, _ = VAE.sample(opt.batch_size, t)
     num_block = len(z_list)
     
     
     if opt.use_buffer:
-        buffer = SampleBuffer(num_block = num_block, max_samples = opt.buffer_size)
+        buffer = SampleBuffer(num_block=num_block, max_samples=opt.buffer_size)
 
     noise_list = [torch.randn(zi.size()).cuda() for zi in z_list]
 
@@ -138,30 +132,28 @@ def train(model, VAE, t, loader, opt, model_path):
         noise_x = torch.randn(image.size()).cuda()
         
         if opt.use_buffer:
-            #annealing the probability of sampling from buffer
-            buffer_prob = min(opt.max_p, opt.max_p*idx/opt.anneal_step)
-            eps_z_nograd = sample_buffer(buffer, z_list, batch_size = image.size(0), p=buffer_prob)
+            # annealing the probability of sampling from buffer
+            buffer_prob = min(opt.max_p, opt.max_p * idx / opt.anneal_step)
+            eps_z_nograd = sample_buffer(buffer, z_list, batch_size=image.size(0), p=buffer_prob)
             eps_z = [Variable(eps_zi, requires_grad=True) for eps_zi in eps_z_nograd]
         else:
-            eps_z = [Variable(torch.Tensor(zi.size()).normal_(0, 1.).cuda() , requires_grad=True) for zi in z_list]
+            eps_z = [Variable(torch.Tensor(zi.size()).normal_(0, 1.).cuda(), requires_grad=True) for zi in z_list]
 
-        eps_x = torch.Tensor(image.size()).normal_(0, 1.).cuda()   
-
-        eps_x = Variable(eps_x, requires_grad = True)
-
+        eps_x = torch.Tensor(image.size()).normal_(0, 1.).cuda()
+        eps_x = Variable(eps_x, requires_grad=True)
 
         requires_grad(parameters, False)
-        
         model.eval()
         VAE.eval()
 
+        # двойная динамика Ланжевена
         for k in range(sample_step):
-            
+
             logits, _, log_p_total = VAE.sample(opt.batch_size, t, eps_z)
             output = VAE.decoder_output(logits)
             neg_x = output.sample(eps_x) 
             
-            log_pxgz = output.log_prob(neg_x).sum(dim = [1,2,3])
+            log_pxgz = output.log_prob(neg_x).sum(dim=[1, 2, 3])
         
             #compute energy
             dvalue = model(neg_x) - log_p_total - log_pxgz 
@@ -169,16 +161,14 @@ def train(model, VAE, t, loader, opt, model_path):
             dvalue.backward()
 
             for i in range(len(eps_z)):    
-                #update z group by group
+                # update z group by group
                 noise_list[i].normal_(0, 1)
-
                 eps_z[i].data.add_(-0.5*step_size, eps_z[i].grad.data * opt.batch_size )
-
                 eps_z[i].data.add_(np.sqrt(step_size), noise_list[i].data)    
                 eps_z[i].grad.detach_()
                 eps_z[i].grad.zero_()
             
-            #update x
+            # update x
             noise_x.normal_(0, 1)
             eps_x.data.add_(-0.5*step_size, eps_x.grad.data * opt.batch_size)
             eps_x.data.add_(np.sqrt(step_size), noise_x.data)
@@ -206,8 +196,7 @@ def train(model, VAE, t, loader, opt, model_path):
         pos_out = model(image)
         neg_out = model(neg_x)
         
-        norm_loss = model.spectral_norm_parallel()
-
+        norm_loss = model.spectral_norm_parallel()  # ?
         loss_reg_s = opt.alpha_s * norm_loss
         
         loss = pos_out.mean() - neg_out.mean()
@@ -290,15 +279,15 @@ def main(eval_args):
     loader, _, num_classes = datasets.get_loaders(eval_args)
 
     if eval_args.dataset == 'cifar10':
-        EBM_model = EBM_CIFAR32(3,eval_args.n_channel, data_init = eval_args.data_init).cuda()
-    elif eval_args.dataset == 'celeba_64':
-        EBM_model = EBM_CelebA64(3,eval_args.n_channel, data_init = eval_args.data_init).cuda()
-    elif eval_args.dataset == 'lsun_church':
-        EBM_model = EBM_LSUN64(3,eval_args.n_channel, data_init = eval_args.data_init).cuda()
-    elif eval_args.dataset == 'celeba_256':
-        EBM_model = EBM_CelebA256(3,eval_args.n_channel, data_init = eval_args.data_init).cuda()
-    else:
-        raise Exception("choose dataset in ['cifar10', 'celeba_64', 'lsun_church', 'celeba_256']")
+        EBM_model = EBM_CIFAR32(3, eval_args.n_channel, data_init=eval_args.data_init).cuda()
+    # elif eval_args.dataset == 'celeba_64':
+    #     EBM_model = EBM_CelebA64(3,eval_args.n_channel, data_init = eval_args.data_init).cuda()
+    # elif eval_args.dataset == 'lsun_church':
+    #     EBM_model = EBM_LSUN64(3,eval_args.n_channel, data_init = eval_args.data_init).cuda()
+    # elif eval_args.dataset == 'celeba_256':
+    #     EBM_model = EBM_CelebA256(3,eval_args.n_channel, data_init = eval_args.data_init).cuda()
+    # else:
+    #     raise Exception("choose dataset in ['cifar10', 'celeba_64', 'lsun_church', 'celeba_256']")
     
     
     model_path = './saved_models/{}/{}/'.format(eval_args.dataset, eval_args.experiment)
@@ -372,7 +361,7 @@ if __name__ == '__main__':
     
     #buffer
     parser.add_argument('--use_buffer', dest='use_buffer', action='store_true', help='use persistent training, default is false')
-    parser.add_argument('--buffer_size', type=int, default = 10000, help='size of buffer')
+    parser.add_argument('--buffer_size', type=int, default=10000, help='size of buffer')
     parser.add_argument('--max_p', type=float, default=0.6, help='maximum p of sampling from buffer')
     parser.add_argument('--anneal_step', type=float, default=5000., help='p annealing step')
     

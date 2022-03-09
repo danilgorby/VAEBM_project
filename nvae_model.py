@@ -1,9 +1,6 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
-#
-# This work is licensed under the NVIDIA Source Code License
-# for VAEBM. To view a copy of this license, see the LICENSE file.
-# ---------------------------------------------------------------
 '''NVAE model, adapted from https://github.com/NVlabs/NVAE/blob/master/model.py'''
+
+
 import time
 import numpy as np
 import torch

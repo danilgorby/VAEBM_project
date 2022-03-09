@@ -1,9 +1,3 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
-#
-# This work is licensed under the NVIDIA Source Code License
-# for VAEBM. To view a copy of this license, see the LICENSE file.
-# ---------------------------------------------------------------
-
 '''
 Code for generating samples from VAEBM
 '''
@@ -11,16 +5,15 @@ Code for generating samples from VAEBM
 import argparse
 import torch
 import numpy as np
-import torch.distributed as dist
-from torch.multiprocessing import Process
+# import torch.distributed as dist
+# from torch.multiprocessing import Process
 from torch.autograd import Variable
 from nvae_model import AutoEncoder
 import utils
 from train_VAEBM_distributed import init_processes
 import torchvision
 from tqdm import tqdm
-from ebm_models import EBM_CelebA64, EBM_LSUN64, EBM_CIFAR32, EBM_CelebA256
-
+from ebm_models import EBM_MNIST  # , EBM_CelebA64, EBM_LSUN64, EBM_CIFAR32, EBM_CelebA256
 
 
 def set_bn(model, bn_eval_mode, num_samples=1, t=1.0, iter=100):
@@ -29,7 +22,7 @@ def set_bn(model, bn_eval_mode, num_samples=1, t=1.0, iter=100):
     else:
         for i in range(iter):
             if i % 10 == 0:
-                print('setting BN statistics iter %d out of %d' % (i+1, iter))
+                print(f'setting BN statistics iter {i + 1} out of {iter}')
             model.train()
             model.sample(num_samples, t)
         model.eval()
@@ -39,7 +32,6 @@ def requires_grad(parameters, flag=True):
         p.requires_grad = flag
 
 
-#%%
 def sample_from_EBM(model, VAE, t, opt):
     parameters = model.parameters()
 
@@ -50,47 +42,40 @@ def sample_from_EBM(model, VAE, t, opt):
     sample_step = opt.num_steps
     with torch.no_grad():
         _, z_list, _ = VAE.sample(opt.batch_size, t) 
-        image = torch.zeros(opt.batch_size,3,opt.im_size,opt.im_size) #placeholder just to get the size of image
+        image = torch.zeros(opt.batch_size, 3, opt.im_size, opt.im_size)  # placeholder just to get the size of image
 
-    
     model.eval()
     VAE.eval()
     
     noise_x = torch.randn(image.size()).cuda()
     noise_list = [torch.randn(zi.size()).cuda() for zi in z_list]
     
-    eps_z = [Variable(torch.Tensor(zi.size()).normal_(0, 1.).cuda() , requires_grad=True) for zi in z_list]
+    eps_z = [Variable(torch.Tensor(zi.size()).normal_(0, 1.).cuda(), requires_grad=True) for zi in z_list]
 
-        
-    eps_x = torch.Tensor(image.size()).normal_(0, 1.).cuda()    
-    eps_x = Variable(eps_x, requires_grad = True)
+    eps_x = torch.Tensor(image.size()).normal_(0, 1.).cuda()
+    eps_x = Variable(eps_x, requires_grad=True)
 
-    
+    # двойная динамика Ланжевена
     for k in tqdm(range(sample_step)):
-        
-        
+
         logits, _, log_p_total = VAE.sample(opt.batch_size, t, eps_z)
         output = VAE.decoder_output(logits)
-        neg_x = output.sample(eps_x = eps_x)   
+        neg_x = output.sample(eps_x=eps_x)
         if opt.renormalize:
             neg_x_renorm = 2. * neg_x - 1.
         else:
             neg_x_renorm = neg_x
-        
 
+        log_pxgz = output.log_prob(neg_x_renorm).sum(dim=[1, 2, 3])
 
-        log_pxgz = output.log_prob(neg_x_renorm).sum(dim = [1,2,3])
-        
-
-        dvalue = model(neg_x_renorm) - log_p_total - log_pxgz 
+        dvalue = model(neg_x_renorm) - log_p_total - log_pxgz  #
 
         dvalue = dvalue.mean()
         dvalue.backward()
         for i in range(len(eps_z)):               
             noise_list[i].normal_(0, 1)
 
-            eps_z[i].data.add_(-0.5*step_size, eps_z[i].grad.data * opt.batch_size )
-
+            eps_z[i].data.add_(-0.5*step_size, eps_z[i].grad.data * opt.batch_size)
             eps_z[i].data.add_(np.sqrt(step_size), noise_list[i].data)    
             eps_z[i].grad.detach_()
             eps_z[i].grad.zero_()
@@ -103,15 +88,12 @@ def sample_from_EBM(model, VAE, t, opt):
         
     
     eps_z = [eps_zi.detach() for eps_zi in eps_z]
-    eps_x = eps_x.detach()
+    # eps_x = eps_x.detach()
     logits, _, _ = VAE.sample(opt.batch_size, t, eps_z)
     output = VAE.decoder_output(logits)
-    final_sample = output.dist.mu
+    final_sample = output.dist.mu  # можно через сэмпл?
 
-        
     return final_sample
-
-    
 
 
 def main(eval_args):
@@ -147,19 +129,19 @@ def main(eval_args):
     t = 1.
     
     if eval_args.dataset == 'cifar10':
-        EBM_model = EBM_CIFAR32(3,eval_args.n_channel, data_init = eval_args.data_init).cuda()
-    elif eval_args.dataset == 'celeba_64':
-        EBM_model = EBM_CelebA64(3,eval_args.n_channel, data_init = eval_args.data_init).cuda()
-    elif eval_args.dataset == 'lsun_church':
-        EBM_model = EBM_LSUN64(3,eval_args.n_channel, data_init = eval_args.data_init).cuda()
-    elif eval_args.dataset == 'celeba_256':
-        EBM_model = EBM_CelebA256(3,eval_args.n_channel, data_init = eval_args.data_init).cuda()
-    else:
-        raise Exception("choose dataset in ['cifar10', 'celeba_64', 'lsun_church', 'celeba_256']")
+        EBM_model = EBM_CIFAR32(3, eval_args.n_channel, data_init=eval_args.data_init).cuda()
+    # elif eval_args.dataset == 'celeba_64':
+    #     EBM_model = EBM_CelebA64(3,eval_args.n_channel, data_init = eval_args.data_init).cuda()
+    # elif eval_args.dataset == 'lsun_church':
+    #     EBM_model = EBM_LSUN64(3,eval_args.n_channel, data_init = eval_args.data_init).cuda()
+    # elif eval_args.dataset == 'celeba_256':
+    #     EBM_model = EBM_CelebA256(3,eval_args.n_channel, data_init = eval_args.data_init).cuda()
+    # else:
+    #     raise Exception("choose dataset in ['cifar10', 'celeba_64', 'lsun_church', 'celeba_256']")
 
         
     with torch.no_grad():
-        EBM_model(torch.rand(10,3,eval_args.im_size,eval_args.im_size).cuda()) #for weight norm data dependent init
+        EBM_model(torch.rand(10, 3, eval_args.im_size, eval_args.im_size).cuda())  # for weight norm data dependent init
 
     state_EBM = torch.load(eval_args.ebm_checkpoint)
     EBM_model.load_state_dict(state_EBM['model'])
@@ -167,13 +149,14 @@ def main(eval_args):
     iter_needed = eval_args.num_samples // eval_args.batch_size 
     model.eval()
     for i in range(iter_needed):
-        i = i 
+        # i = i
         sample = sample_from_EBM(EBM_model, model, t, eval_args)
 
         for j in range(sample.size(0)):
-                   torchvision.utils.save_image(sample[j],(eval_args.savedir+'/EBM_sample_50k/{}.png').format(j+i*eval_args.batch_size),
-                                                normalize=True)
-        print(i)
+            torchvision.utils.save_image(sample[j],
+                                         (eval_args.savedir + f'/EBM_sample_50k/{j + i * eval_args.batch_size}.png'),
+                                         normalize=True)
+        # print(i)
     
    
 
