@@ -1,4 +1,4 @@
-# [VAEBM]((https://arxiv.org/abs/2010.00654)): A Symbiosis between VAE and EBM
+# [VAEBM](https://arxiv.org/abs/2010.00654): A Symbiosis between VAE and EBM
 
 VAEBM обучает энергию (energy network) для уточнения распределения данных, полученных NVAE, 
 где энергия и VAE совместно определяют EBM. 
