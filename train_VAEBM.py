@@ -156,7 +156,7 @@ def train(model, VAE, t, loader, opt, model_path):
             output = VAE.decoder_output(logits)
             neg_x = output.sample(eps_x) 
             
-            log_pxgz = output.log_prob(neg_x).sum(dim=[1, 2, 3])
+            log_pxgz = output.log_prob(neg_x).sum(dim=[1, 2])  # .sum(dim=[1, 2, 3])
         
             #compute energy
             dvalue = model(neg_x) - log_p_total - log_pxgz 
@@ -180,7 +180,6 @@ def train(model, VAE, t, loader, opt, model_path):
 
         
         eps_z = [eps_zi.detach() for eps_zi in eps_z]
-
         eps_x = eps_x.detach()
         
         requires_grad(parameters, True)
@@ -194,7 +193,6 @@ def train(model, VAE, t, loader, opt, model_path):
             neg_x = 0.5*output.dist.mu + 0.5
         else: 
             neg_x = output.sample(eps_x)
-        
 
         pos_out = model(image)
         neg_out = model(neg_x)
@@ -225,7 +223,10 @@ def train(model, VAE, t, loader, opt, model_path):
         d_s_t.append(loss_print.item())
 
         if idx % 100 == 0:
-            neg_img = 0.5*output.dist.mu + 0.5
+            # neg_img = 0.5*output.dist.mu + 0.5
+            neg_img = 0.5*torch.sum(output.means, dim=2) + 0.5
+            neg_x = output.sample(eps_x)
+
             torchvision.utils.save_image(
                 neg_img,
                 model_path + '/images/sample_iter_{}.png'.format(idx),
@@ -248,6 +249,7 @@ def train(model, VAE, t, loader, opt, model_path):
 
 def main(eval_args):
     # ensures that weight initializations are all the same
+    eval_args.save = '/content/VAEBM_project/checkpoints'
     logging = utils.Logger(eval_args.local_rank, eval_args.save)
 
     # load a checkpoint

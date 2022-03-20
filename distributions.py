@@ -102,8 +102,19 @@ class DiscLogistic:
 
         return log_probs
 
-    def sample(self, t=1.):
+    def sample(self, eps=None, t=1.):
+        if eps is None:
+            x = self.sample_given_eps(eps, t)
+            return x
+
         u = torch.Tensor(self.means.size()).uniform_(1e-5, 1. - 1e-5).cuda()                        # B, 3, H, W
+        x = self.means + torch.exp(self.log_scales) * (torch.log(u) - torch.log(1. - u)) / t        # B, 3, H, W
+        x = torch.clamp(x, -1, 1.)
+        x = x / 2. + 0.5
+        return x
+
+    def sample_given_eps(self, eps, t=1.):
+        u = eps # torch.Tensor(self.means.size()).uniform_(1e-5, 1. - 1e-5).cuda()                        # B, 3, H, W
         x = self.means + torch.exp(self.log_scales) * (torch.log(u) - torch.log(1. - u)) / t        # B, 3, H, W
         x = torch.clamp(x, -1, 1.)
         x = x / 2. + 0.5
@@ -166,6 +177,8 @@ class DiscMixLogistic:
         log_probs = torch.sum(log_probs, 1) + F.log_softmax(self.logit_probs, dim=1)  # B, M, H, W
         return torch.logsumexp(log_probs, dim=1)                                      # B, H, W
 
+
+
     def sample(self, t=1.):
         gumbel = -torch.log(- torch.log(torch.Tensor(self.logit_probs.size()).uniform_(1e-5, 1. - 1e-5).cuda()))  # B, M, H, W
         sel = one_hot(torch.argmax(self.logit_probs / t + gumbel, 1), self.num_mix, dim=1)          # B, M, H, W
@@ -194,3 +207,31 @@ class DiscMixLogistic:
         return x
 
 
+    def sample_given_eps(self, eps, t=1.):
+        gumbel = -torch.log(- torch.log(torch.Tensor(self.logit_probs.size()).uniform_(1e-5, 1. - 1e-5).cuda()))  # B, M, H, W
+        sel = one_hot(torch.argmax(self.logit_probs / t + gumbel, 1), self.num_mix, dim=1)          # B, M, H, W
+        sel = sel.unsqueeze(1)                                                                 # B, 1, M, H, W
+
+        # select logistic parameters
+        means = torch.sum(self.means * sel, dim=2)                                             # B, 3, H, W
+        log_scales = torch.sum(self.log_scales * sel, dim=2)                                   # B, 3, H, W
+        coeffs = torch.sum(self.coeffs * sel, dim=2)                                           # B, 3, H, W
+
+        # cells from logistic & clip to interval
+        # we don't actually round to the nearest 8bit value when sampling
+
+        # u = torch.Tensor(means.size()).uniform_(1e-5, 1. - 1e-5).cuda()                        # B, 3, H, W
+        # x = means + torch.exp(log_scales) / t * (torch.log(eps) - torch.log(1. - eps))           # B, 3, H, W
+        x = means + eps * torch.exp(log_scales) / t
+
+        x0 = torch.clamp(x[:, 0, :, :], -1, 1.)                                                # B, H, W
+        x1 = torch.clamp(x[:, 1, :, :] + coeffs[:, 0, :, :] * x0, -1, 1)                       # B, H, W
+        x2 = torch.clamp(x[:, 2, :, :] + coeffs[:, 1, :, :] * x0 + coeffs[:, 2, :, :] * x1, -1, 1)  # B, H, W
+
+        x0 = x0.unsqueeze(1)
+        x1 = x1.unsqueeze(1)
+        x2 = x2.unsqueeze(1)
+
+        x = torch.cat([x0, x1, x2], 1)
+        x = x / 2. + 0.5
+        return x
