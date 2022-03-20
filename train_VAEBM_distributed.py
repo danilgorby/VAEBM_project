@@ -12,7 +12,6 @@ import numpy as np
 import os
 import random
 
-import torch.distributed as dist
 from torch.multiprocessing import Process
 
 from torch.autograd import Variable
@@ -340,6 +339,10 @@ def train(model,VAE, optimizer, buffer, t, loader, z_list, d_s_t, global_step, o
 
 
 
+import torch.distributed as dist
+
+def cleanup():
+    dist.destroy_process_group()
 
 def init_processes(rank, size, fn, args):
     """ Initialize the distributed environment. """
@@ -351,8 +354,7 @@ def init_processes(rank, size, fn, args):
     cleanup()
 
 
-def cleanup():
-    dist.destroy_process_group()
+
 
 
 if __name__ == '__main__':

@@ -37,67 +37,67 @@ def requires_grad(parameters, flag=True):
         p.requires_grad = flag
 
 
-class SampleBuffer:
-    def __init__(self, num_block, max_samples, device = torch.device('cuda:0')):
-        self.max_samples = max_samples
-        self.num_block = num_block
-        self.buffer = [[] for _ in range(num_block)]  #each group of latent variable is a list
-        self.device = device
-
-    def __len__(self):
-        return len(self.buffer[0]) #len of the buffer should be the length of list for each group of latent
-
-    def push(self, z_list): #samples is a list of torch tensor
-        for i in range(self.num_block):
-            zi = z_list[i]
-            zi = zi.detach().to('cpu')
-            for sample in zip(zi):
-                self.buffer[i].append(sample[0])
-                if len(self.buffer[i]) > self.max_samples:
-                    self.buffer[i].pop(0)
-
-    def get(self, n_samples):
-        sample_idx = random.sample(range(len(self.buffer[0])), n_samples)
-        z_list = []
-        for i in range(self.num_block):
-            samples = [self.buffer[i][j] for j in sample_idx]
-            samples = torch.stack(samples, 0)
-            samples = samples.to(self.device)
-            z_list.append(samples)
-
-        return z_list
-    def save(self,fname):
-        torch.save(self.buffer,fname)
-
-
+# class SampleBuffer:
+#     def __init__(self, num_block, max_samples, device = torch.device('cuda:0')):
+#         self.max_samples = max_samples
+#         self.num_block = num_block
+#         self.buffer = [[] for _ in range(num_block)]  #each group of latent variable is a list
+#         self.device = device
+#
+#     def __len__(self):
+#         return len(self.buffer[0]) #len of the buffer should be the length of list for each group of latent
+#
+#     def push(self, z_list): #samples is a list of torch tensor
+#         for i in range(self.num_block):
+#             zi = z_list[i]
+#             zi = zi.detach().to('cpu')
+#             for sample in zip(zi):
+#                 self.buffer[i].append(sample[0])
+#                 if len(self.buffer[i]) > self.max_samples:
+#                     self.buffer[i].pop(0)
+#
+#     def get(self, n_samples):
+#         sample_idx = random.sample(range(len(self.buffer[0])), n_samples)
+#         z_list = []
+#         for i in range(self.num_block):
+#             samples = [self.buffer[i][j] for j in sample_idx]
+#             samples = torch.stack(samples, 0)
+#             samples = samples.to(self.device)
+#             z_list.append(samples)
+#
+#         return z_list
+#     def save(self,fname):
+#         torch.save(self.buffer,fname)
 
 
-def sample_buffer(buffer, z_list_exampler, batch_size=64, t = 1, p=0.95, device=torch.device('cuda:0')):
-    if len(buffer) < 1:
-        eps_z = []
-        for zi in z_list_exampler:
-            eps_z.append(torch.Tensor(batch_size, zi.size(1), zi.size(2), zi.size(3)).normal_(0, 1.).cuda())
 
-        return eps_z
-    
 
-    n_replay = (np.random.rand(batch_size) < p).sum()
-    
-    if n_replay > 0:
-    
-        eps_z_replay = buffer.get(n_replay)
-        eps_z_prior = [torch.Tensor(batch_size - n_replay, zi.size(1), zi.size(2), zi.size(3)).normal_(0, 1.).cuda()\
-                for zi in z_list_exampler]
-
-        eps_z_combine = [torch.cat([z1, z2], dim=0) for z1, z2 in zip(eps_z_replay, eps_z_prior)]
-        
-        return eps_z_combine
-    else:
-        eps_z = [torch.Tensor(batch_size - n_replay, zi.size(1), zi.size(2), zi.size(3)).normal_(0, 1.).cuda() \
-                for zi in z_list_exampler]
-
-    
-        return eps_z
+# def sample_buffer(buffer, z_list_exampler, batch_size=64, t = 1, p=0.95, device=torch.device('cuda:0')):
+#     if len(buffer) < 1:
+#         eps_z = []
+#         for zi in z_list_exampler:
+#             eps_z.append(torch.Tensor(batch_size, zi.size(1), zi.size(2), zi.size(3)).normal_(0, 1.).cuda())
+#
+#         return eps_z
+#
+#
+#     n_replay = (np.random.rand(batch_size) < p).sum()
+#
+#     if n_replay > 0:
+#
+#         eps_z_replay = buffer.get(n_replay)
+#         eps_z_prior = [torch.Tensor(batch_size - n_replay, zi.size(1), zi.size(2), zi.size(3)).normal_(0, 1.).cuda()\
+#                 for zi in z_list_exampler]
+#
+#         eps_z_combine = [torch.cat([z1, z2], dim=0) for z1, z2 in zip(eps_z_replay, eps_z_prior)]
+#
+#         return eps_z_combine
+#     else:
+#         eps_z = [torch.Tensor(batch_size - n_replay, zi.size(1), zi.size(2), zi.size(3)).normal_(0, 1.).cuda() \
+#                 for zi in z_list_exampler]
+#
+#
+#         return eps_z
 
 
 def train(model, VAE, t, loader, opt, model_path):
@@ -122,8 +122,8 @@ def train(model, VAE, t, loader, opt, model_path):
     num_block = len(z_list)
     
     
-    if opt.use_buffer:
-        buffer = SampleBuffer(num_block=num_block, max_samples=opt.buffer_size)
+    # if opt.use_buffer:
+    #     buffer = SampleBuffer(num_block=num_block, max_samples=opt.buffer_size)
 
     noise_list = [torch.randn(zi.size()).cuda() for zi in z_list]
 
@@ -134,13 +134,13 @@ def train(model, VAE, t, loader, opt, model_path):
         
         noise_x = torch.randn(image.size()).cuda()
         
-        if opt.use_buffer:
-            # annealing the probability of sampling from buffer
-            buffer_prob = min(opt.max_p, opt.max_p * idx / opt.anneal_step)
-            eps_z_nograd = sample_buffer(buffer, z_list, batch_size=image.size(0), p=buffer_prob)
-            eps_z = [Variable(eps_zi, requires_grad=True) for eps_zi in eps_z_nograd]
-        else:
-            eps_z = [Variable(torch.Tensor(zi.size()).normal_(0, 1.).cuda(), requires_grad=True) for zi in z_list]
+        # if opt.use_buffer:
+        #     # annealing the probability of sampling from buffer
+        #     buffer_prob = min(opt.max_p, opt.max_p * idx / opt.anneal_step)
+        #     eps_z_nograd = sample_buffer(buffer, z_list, batch_size=image.size(0), p=buffer_prob)
+        #     eps_z = [Variable(eps_zi, requires_grad=True) for eps_zi in eps_z_nograd]
+        # else:
+        eps_z = [Variable(torch.Tensor(zi.size()).normal_(0, 1.).cuda(), requires_grad=True) for zi in z_list]
 
         eps_x = torch.Tensor(image.size()).normal_(0, 1.).cuda()
         eps_x = Variable(eps_x, requires_grad=True)
@@ -224,8 +224,8 @@ def train(model, VAE, t, loader, opt, model_path):
 
         if idx % 100 == 0:
             # neg_img = 0.5*output.dist.mu + 0.5
-            neg_img = 0.5*torch.sum(output.means, dim=2) + 0.5
-            neg_x = output.sample_given_eps(eps_x)
+            # neg_img = 0.5*torch.sum(output.means, dim=2) + 0.5
+            neg_img = output.sample()  # _given_eps(eps_x)
 
             torchvision.utils.save_image(
                 neg_img,

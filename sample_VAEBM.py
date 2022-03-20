@@ -13,7 +13,7 @@ import utils
 from train_VAEBM_distributed import init_processes
 import torchvision
 from tqdm import tqdm
-from ebm_models import EBM_CIFAR32 #EBM_MNIST  # , EBM_CelebA64, EBM_LSUN64, EBM_CIFAR32, EBM_CelebA256
+from ebm_models import EBM_CIFAR32  # EBM_MNIST  # , EBM_CelebA64, EBM_LSUN64, EBM_CIFAR32, EBM_CelebA256
 
 
 def set_bn(model, bn_eval_mode, num_samples=1, t=1.0, iter=100):
