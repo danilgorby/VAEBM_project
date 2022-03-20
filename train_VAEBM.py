@@ -154,7 +154,7 @@ def train(model, VAE, t, loader, opt, model_path):
 
             logits, _, log_p_total = VAE.sample(opt.batch_size, t, eps_z)
             output = VAE.decoder_output(logits)
-            neg_x = output.sample(eps_x) 
+            neg_x = output.sample_given_eps(eps_x)
             
             log_pxgz = output.log_prob(neg_x).sum(dim=[1, 2])  # .sum(dim=[1, 2, 3])
         
@@ -192,7 +192,7 @@ def train(model, VAE, t, loader, opt, model_path):
         if opt.use_mu_cd:
             neg_x = 0.5*output.dist.mu + 0.5
         else: 
-            neg_x = output.sample(eps_x)
+            neg_x = output.sample_given_eps(eps_x)
 
         pos_out = model(image)
         neg_out = model(neg_x)
@@ -225,7 +225,7 @@ def train(model, VAE, t, loader, opt, model_path):
         if idx % 100 == 0:
             # neg_img = 0.5*output.dist.mu + 0.5
             neg_img = 0.5*torch.sum(output.means, dim=2) + 0.5
-            neg_x = output.sample(eps_x)
+            neg_x = output.sample_given_eps(eps_x)
 
             torchvision.utils.save_image(
                 neg_img,
