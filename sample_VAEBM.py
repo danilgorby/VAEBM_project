@@ -5,15 +5,17 @@ Code for generating samples from VAEBM
 import argparse
 import torch
 import numpy as np
-# import torch.distributed as dist
+import torch.distributed as dist
 # from torch.multiprocessing import Process
 from torch.autograd import Variable
 from nvae_model import AutoEncoder
 import utils
-from train_VAEBM_distributed import init_processes
+# from train_VAEBM_distributed import init_processes
 import torchvision
 from tqdm import tqdm
 from ebm_models import EBM_CIFAR32  # EBM_MNIST  # , EBM_CelebA64, EBM_LSUN64, EBM_CIFAR32, EBM_CelebA256
+from utils import init_processes
+
 
 
 def set_bn(model, bn_eval_mode, num_samples=1, t=1.0, iter=100):

@@ -24,6 +24,20 @@ import torch.nn.functional as F
 from tensorboardX import SummaryWriter
 
 
+import os
+
+def cleanup():
+    dist.destroy_process_group()
+
+def init_processes(rank, size, fn, args):
+    """ Initialize the distributed environment. """
+    os.environ['MASTER_ADDR'] = args.master_address
+    os.environ['MASTER_PORT'] = '6020'
+    torch.cuda.set_device(args.local_rank)
+    dist.init_process_group(backend='nccl', init_method='env://', rank=rank, world_size=size)
+    fn(args)
+    cleanup()
+
 def count_parameters_in_M(model):
     return np.sum(np.prod(v.size()) for name, v in model.named_parameters() if "auxiliary" not in name)/1e6
 
