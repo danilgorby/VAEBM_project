@@ -150,9 +150,9 @@ def train(model, VAE, t, loader, opt, model_path):
         if idx % opt.sample_freq == 0:
             # neg_img = 0.5*output.dist.mu + 0.5
             # neg_img = 0.5*torch.sum(output.means, dim=2) + 0.5
-            neg_img = output.sample()  # _given_eps(eps_x)
+            # neg_img = output.sample()  # _given_eps(eps_x)
 
-            torchvision.utils.save_image(neg_img, model_path + "/images/sample.png", nrow=16, normalize=True)
+            torchvision.utils.save_image(neg_x, model_path + "/images/sample.png", nrow=16, normalize=True)
 
             wandb.log({"Sample": wandb.Image((model_path + "/images/sample.png".format(idx)))})
 
@@ -172,7 +172,8 @@ def train(model, VAE, t, loader, opt, model_path):
 
 def main(eval_args):
     # ensures that weight initializations are all the same
-    eval_args.save = "/content/VAEBM_project/checkpoints"
+    # eval_args.save = '/content/VAEBM_project/checkpoints' # for colab
+    eval_args.save = 'checkpoints'  # for data sphere
     logging = utils.Logger(eval_args.local_rank, eval_args.save)
 
     # load a checkpoint
