@@ -167,7 +167,7 @@ def train(model, VAE, t, loader, opt, model_path):
 def main(eval_args):
     # ensures that weight initializations are all the same
     # eval_args.save = '/content/VAEBM_project/checkpoints' # for colab
-    eval_args.save = '/VAEBM_project/checkpoints'  # for data sphere
+    eval_args.save = 'checkpoints'  # for data sphere
     logging = utils.Logger(eval_args.local_rank, eval_args.save)
 
     # load a checkpoint
