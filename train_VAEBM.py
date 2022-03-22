@@ -10,12 +10,15 @@ import torch.distributed as dist
 from torch.autograd import Variable
 from torch import optim
 import torch.cuda.amp as amp
+import wandb
+import datetime
 
 from nvae_model import AutoEncoder
 from utils import init_processes
 import utils
 import datasets
 import torchvision
+from PIL import Image
 from tqdm import tqdm
 from ebm_models import EBM_CIFAR32
 
@@ -39,6 +42,14 @@ def train(model, VAE, t, loader, opt, model_path):
     
     requires_grad(VAE.parameters(), False)
     loader = tqdm(enumerate(sample_data(loader)))
+    
+    if opt.use_wandb:
+        if not os.environ.get("WANDB_API_KEY", None):
+            os.environ["WANDB_API_KEY"] = opt.wandb_key
+        
+        name = opt.experiment + datetime.strftime(datetime.now(), "_%h%d_%H%M%S")
+        project = "project_gans"
+        wandb.init(project=project, entity="daevsikova", config=opt, name=name)
     
 
     parameters = model.parameters()
@@ -134,10 +145,11 @@ def train(model, VAE, t, loader, opt, model_path):
 
         optimizer.step()
 
-
         loader.set_description(f'loss: {loss.mean().item():.5f}')
         loss_print = pos_out.mean() - neg_out.mean()
         d_s_t.append(loss_print.item())
+
+        wandb.log({'EMB loss': loss.mean().item(), 'EMB total loss': loss_total.mean().item()})
 
         if idx % 100 == 0:
             # neg_img = 0.5*output.dist.mu + 0.5
@@ -150,15 +162,19 @@ def train(model, VAE, t, loader, opt, model_path):
                 nrow=16,
                 normalize=True
             )
+            
+            wandb.log({'Sample': wandb.Image((model_path + '/images/sample_iter_{}.png'.format(idx)))})
 
             torch.save(d_s_t, model_path + 'd_s_t')
 
         
-        if idx % 500 == 0:
+        if idx % opt.save_freq == 0:
             state_dict = {}
             state_dict['model'] = model.state_dict()
             state_dict['optimizer'] = optimizer.state_dict()
-            torch.save(state_dict, model_path + 'EBM_{}.pth'.format(idx))
+            model_save_path =  model_path + 'EBM_{}.pth'.format(idx)
+            torch.save(state_dict, model_save_path)
+            wandb.save(model_save_path)
 
         if idx == opt.total_iter:
             break
@@ -239,7 +255,7 @@ if __name__ == '__main__':
     # experimental results
     parser.add_argument('--checkpoint', type=str, default='./checkpoints/VAE_checkpoint.pt',
                         help='location of the NVAE checkpoint')
-    parser.add_argument('--experiment', default='EBM_1', help='experiment name, model chekcpoint and samples will be saved here')
+    parser.add_argument('--experiment', default='EBM_1', help='experiment name, model checkpoint and samples will be saved here')
 
     parser.add_argument('--save', type=str, default='/tmp/nasvae/expr',
                         help='location of the NVAE logging')
@@ -289,6 +305,12 @@ if __name__ == '__main__':
     
     parser.add_argument('--comment', default='', type=str, help='some comments')
     
+    # custom args
+    parser.add_argument('--use_wandb', action='store_true', default=False)
+    parser.add_argument('--save_freq', default=500, type=int)
+    parser.add_argument('--wandb_key', default='e891f26c3ad7fd5a7e215dc4e344acc89c8861da', type=str)
+
+
     args = parser.parse_args()
     
     args.distributed = False
