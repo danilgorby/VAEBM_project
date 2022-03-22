@@ -11,7 +11,7 @@ from torch.autograd import Variable
 from torch import optim
 import torch.cuda.amp as amp
 import wandb
-import datetime
+from datetime import datetime
 
 from nvae_model import AutoEncoder
 from utils import init_processes
@@ -151,19 +151,19 @@ def train(model, VAE, t, loader, opt, model_path):
 
         wandb.log({'EMB loss': loss.mean().item(), 'EMB total loss': loss_total.mean().item()})
 
-        if idx % 100 == 0:
+        if idx % opt.sample_freq == 0:
             # neg_img = 0.5*output.dist.mu + 0.5
             # neg_img = 0.5*torch.sum(output.means, dim=2) + 0.5
             neg_img = output.sample()  # _given_eps(eps_x)
 
             torchvision.utils.save_image(
                 neg_img,
-                model_path + '/images/sample_iter_{}.png'.format(idx),
+                model_path + '/images/sample.png',
                 nrow=16,
                 normalize=True
             )
-            
-            wandb.log({'Sample': wandb.Image((model_path + '/images/sample_iter_{}.png'.format(idx)))})
+
+            wandb.log({'Sample': wandb.Image((model_path + '/images/sample.png'.format(idx)))})
 
             torch.save(d_s_t, model_path + 'd_s_t')
 
@@ -308,6 +308,7 @@ if __name__ == '__main__':
     # custom args
     parser.add_argument('--use_wandb', action='store_true', default=False)
     parser.add_argument('--save_freq', default=500, type=int)
+    parser.add_argument('--sample_freq', default=20, type=int)
     parser.add_argument('--wandb_key', default='e891f26c3ad7fd5a7e215dc4e344acc89c8861da', type=str)
 
 
