@@ -90,12 +90,12 @@ def sample_from_EBM(model, VAE, t, opt):
 
 
     eps_z = [eps_zi.detach() for eps_zi in eps_z]
-    # eps_x = eps_x.detach()
+    eps_x = eps_x.detach()
+
     logits, _, _ = VAE.sample(opt.batch_size, t, eps_z)
     output = VAE.decoder_output(logits)
     # final_sample = output.dist.mu  # можно через сэмпл?
-    final_sample = output.sample()  # [bs, 3, 32, 32]
-
+    final_sample = output.sample_given_eps(eps_x) # .sample()  # [bs, 3, 32, 32]
 
     return final_sample
 
