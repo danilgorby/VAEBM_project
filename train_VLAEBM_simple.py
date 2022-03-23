@@ -36,29 +36,48 @@ def requires_grad(parameters, flag=True):
         p.requires_grad = flag
 
 
+class Normal:
+    def __init__(self, mu, log_sigma, temp=1., clamp = False, clamp_val = -3):
+        self.mu = mu
+        self.mu = 5. * torch.tanh(mu / 5.)            # soft differentiable clamp between [-5, 5]
+        if clamp:
+            log_sigma = torch.clamp(5. * torch.tanh(log_sigma / 5.), min = clamp_val)   # soft differentiable clamp between [-5, 5]
+        else:
+            log_sigma = 5. * torch.tanh(log_sigma / 5.)
+        self.sigma = torch.exp(log_sigma) + 1e-2      # we don't need this after soft clamp
+        if temp != 1.:
+            self.sigma *= temp
+
+    def sample(self):
+        eps = torch.Tensor(self.mu.size()).normal_()
+        return eps * self.sigma + self.mu, eps
+
+    def sample_given_eps(self, eps):
+        return eps * self.sigma + self.mu
+
+    def log_p(self, samples):
+        normalized_samples = (samples - self.mu) / self.sigma
+        log_p = - 0.5 * normalized_samples * normalized_samples - 0.5 * np.log(2 * np.pi) - torch.log(self.sigma)
+        return log_p
+
+    # def kl(self, normal_dist):
+    #     term1 = (self.mu - normal_dist.mu) / normal_dist.sigma
+    #     term2 = self.sigma / normal_dist.sigma
+
+    #     return 0.5 * (term1 * term1 + term2 * term2) - 0.5 - torch.log(term2)
+
+
 def vae_sample(VAE, num_samples, eps_z=None):
-
+    dist = Normal(mu=torch.zeros((num_samples, 16)).cuda(),
+                  log_sigma=torch.zeros((num_samples, 16)).cuda(), temp=t)
     if eps_z is None:
-    	eps_z = VAE.lat_dist.sample((num_samples, VAE.latent_dim)).squeeze(2)
+        z, _ = dist.sample()
+    else:
+        z = dist.sample_given_eps(eps_z)
 
-    z = torch.zeros_like(eps_z) # eps_z # copy.copy(eps_z) # torch.zeros_like(eps_z)
-    log_sig_eps_ = []
-
-    for i in range(VAE.latent_dim):
-        mu_eps, log_sig_eps = VAE.made(z)[:, i].chunk(2, dim=-1)
-        log_sig_eps_.append(log_sig_eps)
-
-        mu_eps = mu_eps.squeeze(1)
-        log_sig_eps = log_sig_eps.squeeze(1)
-        z[:, i] = (eps_z[:, i] - mu_eps) / torch.exp(log_sig_eps)
-
-    # eps = z * torch.exp(log_sig_eps) + mu_eps
-    # print(log_sig_eps_[0])
-    log_sig_eps = torch.stack(log_sig_eps_, dim=1).squeeze(2)
-    log_pz = -0.5 * np.log(2 * np.pi) - 0.5 * eps_z ** 2 + log_sig_eps
-
+    log_p = dist.log_p(z)
     logits = VAE.decoder(z)
-    return logits, z, log_pz
+    return logits, z, log_p
 
 
 def train(model, VAE, t, loader, opt, model_path):
@@ -115,6 +134,7 @@ def train(model, VAE, t, loader, opt, model_path):
             log_pxgz = output.log_prob(neg_x).sum(dim=[1, 2, 3])
 
             # compute energy
+            # print('!!!!!', model(neg_x).shape, log_p_total.shape, log_pxgz.shape)
             dvalue = model(neg_x) - log_p_total.sum(dim=1) - log_pxgz
             dvalue = dvalue.mean()
             dvalue.backward()
