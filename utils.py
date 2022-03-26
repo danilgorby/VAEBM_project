@@ -1,26 +1,13 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
-#
-# This work is licensed under the NVIDIA Source Code License
-# for VAEBM. To view a copy of this license, see the LICENSE file.
-# ---------------------------------------------------------------
-
 import matplotlib
 matplotlib.use('agg')
-import matplotlib.pyplot as plt
-import torch.distributed as dist
 
 import logging
-import os
-import shutil
 import time
-from datetime import timedelta
 import sys
 
 import torch
 import numpy as np
 import torch.distributed as dist
-
-import torch.nn.functional as F
 from tensorboardX import SummaryWriter
 
 
@@ -29,13 +16,13 @@ import os
 def cleanup():
     dist.destroy_process_group()
 
-def init_processes(rank, size, fn, args):
+def init_processes(rank, size, fn, bs, path):
     """ Initialize the distributed environment. """
-    os.environ['MASTER_ADDR'] = args.master_address
+    os.environ['MASTER_ADDR'] = "127.0.0.1"
     os.environ['MASTER_PORT'] = '6020'
-    torch.cuda.set_device(args.local_rank)
+    torch.cuda.set_device(0)
     dist.init_process_group(backend='nccl', init_method='env://', rank=rank, world_size=size)
-    fn(args)
+    fn(bs, path)
     cleanup()
 
 def count_parameters_in_M(model):
@@ -181,17 +168,8 @@ def num_output(dataset):
 
 
 def get_input_size(dataset):
-    if dataset == 'mnist':
+    if dataset == 'cifar10':
         return 32
-    elif dataset == 'stacked_mnist':
-        return 32
-    elif dataset == 'cifar10':
-        return 32
-    elif dataset.startswith('celeba') or dataset.startswith('imagenet') or dataset.startswith('lsun'):
-        size = int(dataset.split('_')[-1])
-        return size
-    elif dataset == 'ffhq':
-        return 256
     else:
         raise NotImplementedError
 
@@ -201,6 +179,37 @@ def pre_process(x, num_bits):
         x = torch.floor(x * 255 / 2 ** (8 - num_bits))
         x /= (2 ** num_bits - 1)
     return x
+
+
+def sample_data(loader):
+    loader_iter = iter(loader)
+
+    while True:
+        try:
+            yield next(loader_iter)
+
+        except StopIteration:
+            loader_iter = iter(loader)
+
+            yield next(loader_iter)
+
+
+def clip_grad(parameters, optimizer):
+    with torch.no_grad():
+        for group in optimizer.param_groups:
+            for p in group['params']:
+                state = optimizer.state[p]
+
+                if 'step' not in state or state['step'] < 1:
+                    continue
+
+                step = state['step']
+                exp_avg_sq = state['exp_avg_sq']
+                _, beta2 = group['betas']
+
+                bound = 3 * torch.sqrt(exp_avg_sq / (1 - beta2 ** step)) + 0.1
+                p.grad.data.copy_(torch.max(torch.min(p.grad.data, bound), -bound))
+
 
 
 def get_arch_cells(arch_type):

@@ -1,10 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from thirdparty.swish import Swish as SwishFN
-from thirdparty.inplaced_sync_batchnorm import SyncBatchNormSwish
-
+from inplaced_sync_batchnorm import SyncBatchNormSwish
 from utils import average_tensor
 from collections import OrderedDict
 
@@ -39,6 +36,20 @@ def norm(t, dim):
 
 def logit(t):
     return torch.log(t) - torch.log(1 - t)
+
+
+class SwishFN(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, i):
+        result = i * torch.sigmoid(i)
+        ctx.save_for_backward(i)
+        return result
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        i = ctx.saved_variables[0]
+        sigmoid_i = torch.sigmoid(i)
+        return grad_output * (sigmoid_i * (1 + i * (1 - sigmoid_i)))
 
 
 def act(t):

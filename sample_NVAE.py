@@ -1,9 +1,4 @@
-'''
-Code for generating samples from NVAE
-'''
-
 from nvae_model import AutoEncoder
-# import torch.distributed as dist
 import torchvision
 import argparse
 import utils
@@ -47,7 +42,7 @@ def main(eval_args):
 
         for j in range(sample.size(0)):
             torchvision.utils.save_image(sample[j],
-                                         (eval_args.savedir + f'VAE_sample_50k/{j + i * eval_args.batch_size}.png'),
+                                         (eval_args.savedir + f'/{j + i * eval_args.batch_size}.png'),
                                          normalize=True)
 
 
