@@ -1,8 +1,10 @@
 # [VAEBM](https://arxiv.org/abs/2010.00654): A Symbiosis between VAE and EBM
 
-VAEBM обучает функцию энергию (energy network) для уточнения распределения данных, полученных NVAE, 
-где энергия и VAE совместно определяют VAEBM. 
+VAEBM обучает функцию энергии (energy network) для уточнения распределения, 
+полученного с помощью NVAE. 
 
 В обучении VAEBM выделяется два этапа:
 * обучение NVAE
-* обучения энергии
+* обучение энергии
+
+VQ-VAE, VAEBM wandb [runs](https://wandb.ai/daevsikova/project_gans)
